@@ -1,6 +1,6 @@
 What this is: 
 
-Draw a pattern for your signal, get an array of RGB values to put into your LED control algorithm.
+Draw a pattern for your signal, get an array of RGB values to put into your LED control algorithm. WIP.
 
 TODO: Add a demo GIF here.
 

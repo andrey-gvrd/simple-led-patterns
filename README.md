@@ -2,6 +2,8 @@ What this is:
 
 Draw a pattern for your signal, get an array of RGB values to put into your LED control algorithm.
 
+TODO: Add a demo GIF here.
+
 Example:
 
 So let's say you want to create a pattern for an RGB LED which repeats every second. Pattern is a an initial spike of purple light followd by several spikes of lower intensity.

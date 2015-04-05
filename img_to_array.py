@@ -83,9 +83,9 @@ class img_to_array:
                     break
         return brightness_array
 
-    # Creates a static table. Not very good when your indexes are floats.
+    # Creates a static table for color reference (not used in the algorithm).
     def hls_palette_create(self):
-        self.base_h, self.base_l, self.base_s = colorsys.hls_to_rgb(self.line_color.r / 255.0, 
+        self.base_h, self.base_l, self.base_s = colorsys.rgb_to_hls(self.line_color.r / 255.0, 
                                                                     self.line_color.g / 255.0, 
                                                                     self.line_color.b / 255.0)
         l_step = self.base_l / self.height
@@ -95,29 +95,32 @@ class img_to_array:
             l -= l_step
 
     # Reaturs an (h, l, s) value for any float value on the input. Basically [0.0 - 1.0] -> [0.0 - base_l]
-    def hls_palette_get(self):
-        return h, l, s = 
+    def lightness_get(self, brightness):
+        return  self.base_l * brightness
 
     def create_color_array(self, corrected_brightness_array):
-        for x in range(self.width * 3):
-            h, l, s = self.hls_palette[corrected_brightness_array[x]]
+        color_array = []
+        for x in range(self.width):
+            r, g, b = colorsys.hls_to_rgb(self.base_h, self.lightness_get(corrected_brightness_array[x]), self.base_s)
+            color_array.extend((int(r * 256), int(g * 256), int(b * 256)))
+        return color_array
 
     def c_array(self, full_path, array):
-        declaration_start = 'const uint8_t pattern[] = {\n'
-        declaration_end   = '};\n'
+        length_str = '#define PATTER_LENGTH ' + str(len(array)) + '\n'
+        declaration_start = 'const uint8_t pattern[] = {\n\t'
+        declaration_end   = '\n};\n'
         c_arr = open(full_path, 'w')
-        c_arr.write(declaration_start)
-        for x in range (len(array)):
-            c_arr.write('\t')
-            for y in range (16):
-                c_arr.write(str(array[x]) + ', ')
-            c_arr.write('\n')
+        c_arr.write(length_str + declaration_start)
+        for x in range(len(array)):
+            c_arr.write(str(array[x]) + ', ')
+            if (x % 15 == 0 and x > 0):
+                c_arr.write('\n\t')
         c_arr.write(declaration_end)
 
-def correct_brightness_log(array):
-    scale = 0.58   # To scale the logarithmic function to [0 - 1]
+def gamma_correction(array):
+    power = 1 / 2.2
     for x in range(len(array)):
-        array[x] = scale * (math.exp(array[x]) - 1)
+        array[x] **= power
     return array
 
 def main():
@@ -138,88 +141,23 @@ def main():
     brightness_array = i2a.brightness_extract()
 
     # 4.
-    corrected_brightness_array = correct_brightness_log(brightness_array)
+    corrected_brightness_array = gamma_correction(brightness_array)
 
     # 5.
     i2a.hls_palette_create()
 
     # 6.
-    #color_array = i2a.create_color_array(corrected_brightness_array)
+    color_array = i2a.create_color_array(corrected_brightness_array)
 
-    '''
-    # Get base color line:
-    (line_r, line_g, line_b) = i2a.im_prepare(im_rgb)
-    (line_h, line_l, line_s) = colorsys.rgb_to_hls(line_r/255.0, line_g/255.0, line_b/255.0)
-    line_h *= 255.0
-    line_l *= 255.0
-    line_s *= 255.0
+    # Debug output:
+    color_array_file = open(debug_data_dir + 'color_array.txt', 'w')
+    for x in range(3):
+        for y in range(x, len(color_array), 3):
+            color_array_file.write(str(color_array[y]) + '\t')
+        color_array_file.write('\n')
 
-    # 
-    new_width  = 1
-    new_height = im_height
-    im_hls = Image.new('RGB', (new_width, new_height), 'white')
-    l = line_l
-    l_start = l
-    l_increment = l_start / new_height
-    print('l_increment: %f' % l_increment)
-    for y in range (new_height):
-        l = l_start - y * l_increment
-        print ('l: %f, y: %d' % (l, y))
-        r, g, b = colorsys.hls_to_rgb(line_h/255.0, l/255.0, line_s/255.0)
-        r *= 255
-        g *= 255
-        b *= 255
-        print ('(%f, %f, %f)' % (r, g ,b))
-        im_hls.putpixel((0, y), (int(r), int(g), int(b)))
-    #im_hls.show()
-
-    # Get line position into the array:
-    array = i2a.array_extract(im_rgb, line_r, line_g, line_b)
-    original = open(debug_data_dir + 'original.txt', 'w')
-    for x in range (len(array)):
-            original.write(str(array[x]) + '\t')
-
-    # Put HLS data onto original line based on array data
-    im_adj_array = Image.new('RGB', (im_width, im_height), 'white')
-    for x in range (len(array)):
-        im_adj_array.putpixel((x, 256 - array[x]), (im_hls.getpixel((0, 256 - array[x]))))
-    #im_adj_array.show()
-
-    # Put HLS data onto original line based on image data
-    im_adj_image = im_rgb.copy()
-    adj_array = []
-    for x in range (im_width):
-        for y in range (im_height):
-            r_old, g_old, b_old = im_adj_image.getpixel((x, y))
-            if (is_white(r_old, g_old, b_old) == False):
-                adj_r, adj_g, adj_b = im_hls.getpixel((0, 256 - array[x]))
-                adj_array.append(adj_r)
-                adj_array.append(adj_g)
-                adj_array.append(adj_b)
-                im_adj_image.putpixel((x, y), (adj_r, adj_g, adj_b))
-    im_adj_image.show()
-
-    adj_array_file = open(debug_data_dir + 'adj_array.txt', 'w')
-    for y in range (3):
-        for x in range (y, len(adj_array), 3):
-            print('x: %d' % x)
-            adj_array_file.write(str(adj_array[x]) + '\t')
-        adj_array_file.write('\n')  
-
-    array = i2a.scale_8bit_to_percentage(array, im_height)
-
-    percentage = open(debug_data_dir + 'percentage.txt', 'w')
-    for x in range (len(array)):
-            percentage.write(str(array[x]) + '\t')
-
-    array = i2a.scale_percentage_to_log(array)
-
-    out_array = open(debug_data_dir + 'out_array.txt', 'w')
-    for x in range (len(array)):
-            out_array.write(str(array[x]) + '\t')
-
-    c_arr = i2a.c_array(output_dir + 'c_array.h', array)
-    '''
+    # 7.
+    i2a.c_array(output_dir + 'out.h', color_array)
 
 if __name__ == '__main__':
     main()
